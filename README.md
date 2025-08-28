@@ -1,9 +1,11 @@
-# Ollama PyQt Chat
+# Ollama PyQt App
 
 A simple desktop application built with **PyQt6** that provides a graphical interface for interacting with [Ollama](https://ollama.ai/).  
 It supports both **stateless text generation** (`/api/generate`, similar to `ollama run`) and **chat with history** (`/api/chat`).  
 
 The app features streaming responses, model selection, adjustable generation parameters (temperature, top_p), and persistent settings.
+
+<img width="1340" height="952" alt="image" src="https://github.com/user-attachments/assets/95433bac-c562-44b5-a2c7-299c40496231" />
 
 ---
 
