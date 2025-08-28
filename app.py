@@ -12,23 +12,23 @@ from PyQt6.QtWidgets import (
     QCheckBox
 )
 
-# ---- Константы ----
+
 OLLAMA_HOST = "http://127.0.0.1:11434"
 APP_DIR = Path.home() / ".ollama_pyqt"
 CONFIG_PATH = APP_DIR / "config.json"
 
 
-# ---------- Workers (в потоках), чтобы не блокировать UI ----------
+# ---------- Workers (in threads), so as not to block the UI ----------
 
 class GenerateWorker(QObject):
     """
-    Универсальный воркер:
-    - use_chat=False  => /api/generate (без контекста, как `ollama run`)
-    - use_chat=True   => /api/chat (с историей сообщений)
+    Universal worker:
+    - use_chat=False  => /api/generate (stateless, like `ollama run`)
+    - use_chat=True   => /api/chat (with message history)
     """
-    chunk = pyqtSignal(str)         # потоковые фрагменты ответа
-    finished = pyqtSignal(str)      # финальный ответ (собранный)
-    failed = pyqtSignal(str)        # ошибка
+    chunk = pyqtSignal(str)         # streaming response fragments
+    finished = pyqtSignal(str)      # final full response
+    failed = pyqtSignal(str)        # error
 
     def __init__(self,
                  model: str,
@@ -65,13 +65,13 @@ class GenerateWorker(QObject):
                         except json.JSONDecodeError:
                             continue
 
-                        # стандартное поле стрима generate
+                        # standard streaming field for generate
                         if "response" in obj:
                             text = obj["response"]
                             compiled.append(text)
                             self.chunk.emit(text)
 
-                        # на всякий случай поддержим message.content если вдруг придёт
+                        # just in case, support message.content if it arrives
                         elif "message" in obj and obj["message"] and "content" in obj["message"]:
                             text = obj["message"]["content"]
                             compiled.append(text)
@@ -99,13 +99,13 @@ class GenerateWorker(QObject):
                         except json.JSONDecodeError:
                             continue
 
-                        # у chat-стрима инкремент приходит в message.content
+                        # chat-stream increments come in message.content
                         if "message" in obj and obj["message"] and "content" in obj["message"]:
                             text = obj["message"]["content"]
                             compiled.append(text)
                             self.chunk.emit(text)
 
-                        # некоторые сборки также кладут кусочки в 'response'
+                        # some builds also put chunks in 'response'
                         elif "response" in obj:
                             text = obj["response"]
                             compiled.append(text)
@@ -119,7 +119,7 @@ class GenerateWorker(QObject):
             self.failed.emit(str(e))
 
 
-# ---------- Конфиг ----------
+# ---------- Config ----------
 
 def load_config() -> dict:
     try:
@@ -141,7 +141,7 @@ def save_config(cfg: dict):
         pass
 
 
-# ---------- Основное окно ----------
+# ---------- Main window ----------
 
 class ChatWindow(QWidget):
     def __init__(self):
@@ -154,7 +154,7 @@ class ChatWindow(QWidget):
         self._cfg = load_config()
         self._last_selected_model: Optional[str] = self._cfg.get("last_model")
         self._chat_mode: bool = bool(self._cfg.get("chat_mode", False))  # False = ollama run (stateless)
-        self._history: List[Dict[str, str]] = []  # для chat-режима
+        self._history: List[Dict[str, str]] = []  # for chat mode
 
         # ---- UI ----
         self.chat = QTextBrowser()
@@ -162,37 +162,37 @@ class ChatWindow(QWidget):
         self.chat.setReadOnly(True)
 
         self.input = QLineEdit()
-        self.input.setPlaceholderText("Введите запрос и нажмите Enter…")
+        self.input.setPlaceholderText('Type your prompt and press "Enter" or click "Send"…')
         self.input.returnPressed.connect(self.on_send)
 
-        self.send_btn = QPushButton("Отправить")
+        self.send_btn = QPushButton("Send")
         self.send_btn.clicked.connect(self.on_send)
 
-        # выбор модели
+        # model selection
         self.model_combo = QComboBox()
         self.refresh_btn = QPushButton("↻")
-        self.refresh_btn.setToolTip("Обновить список моделей (ollama list)")
+        self.refresh_btn.setToolTip("Refresh model list (ollama list)")
         self.refresh_btn.clicked.connect(self.refresh_models)
 
-        # режим: История (Chat)
-        self.chat_mode_cb = QCheckBox("История (Chat)")
+        # mode: History (Chat)
+        self.chat_mode_cb = QCheckBox("History (Chat)")
         self.chat_mode_cb.setChecked(self._chat_mode)
         self.chat_mode_cb.stateChanged.connect(self.on_toggle_chat_mode)
 
-        self.clear_history_btn = QPushButton("Очистить историю")
+        self.clear_history_btn = QPushButton("Clear history")
         self.clear_history_btn.clicked.connect(self.on_clear_history)
         self.clear_history_btn.setEnabled(self._chat_mode)
 
-        # верхняя панель
+        # top panel
         top_bar = QHBoxLayout()
-        top_bar.addWidget(QLabel("Модель:"))
+        top_bar.addWidget(QLabel("Model:"))
         top_bar.addWidget(self.model_combo, stretch=1)
         top_bar.addWidget(self.refresh_btn)
         top_bar.addSpacing(12)
         top_bar.addWidget(self.chat_mode_cb)
         top_bar.addWidget(self.clear_history_btn)
 
-        # ---- Настройки (temperature / top_p) ----
+        # ---- Settings (temperature / top_p) ----
         self.temp_spin = QDoubleSpinBox()
         self.temp_spin.setRange(0.0, 2.0)
         self.temp_spin.setSingleStep(0.1)
@@ -212,7 +212,7 @@ class ChatWindow(QWidget):
         settings_bar.addWidget(self.top_p_spin)
         settings_bar.addStretch()
 
-        # низ
+        # bottom panel
         bottom_bar = QHBoxLayout()
         bottom_bar.addWidget(self.input, stretch=1)
         bottom_bar.addWidget(self.send_btn)
@@ -223,7 +223,7 @@ class ChatWindow(QWidget):
         root.addWidget(self.chat, stretch=1)
         root.addLayout(bottom_bar)
 
-        # ---- Форматы текста ----
+        # ---- Text formats ----
         self.fmt_normal = QTextCharFormat()
         self.fmt_bold = QTextCharFormat()
         self.fmt_bold.setFontWeight(QFont.Weight.Bold)
@@ -243,14 +243,14 @@ class ChatWindow(QWidget):
         self.fmt_err.setForeground(QColor("#b00020"))
         self.fmt_err.setFontWeight(QFont.Weight.Bold)
 
-        # Markdown-парсер для потока (только **bold**)
+        # Markdown parser for stream (only **bold**)
         self._md_in_bold = False
         self._md_carry = ""
 
-        # подгрузка моделей
+        # preload models
         self.refresh_models(initial=True)
 
-    # ---- модели ----
+    # ---- models ----
     def refresh_models(self, initial: bool = False):
         self.model_combo.setEnabled(False)
         self.refresh_btn.setEnabled(False)
@@ -264,19 +264,19 @@ class ChatWindow(QWidget):
             except Exception as e:
                 return [], str(e)
 
-        # без отдельного QThread: запрос лёгкий, но если хотите – можно как раньше вынести
+        # without separate QThread: request is lightweight, but you can move it if desired
         models, error = list_models()
         self.on_models_loaded(models, error)
 
         if not initial and not error:
-            self.append_sys("Список моделей обновлён.")
+            self.append_sys("Model list updated.")
 
     def on_models_loaded(self, models: List[str], error: str):
         self.model_combo.clear()
         if error:
-            self.append_err(f"Не удалось получить список моделей: {error}")
+            self.append_err(f"Could not get model list: {error}")
         elif not models:
-            self.append_err("Модели не найдены. Убедитесь, что Ollama запущен и модели установлены (например, `ollama pull llama3:8b`).")
+            self.append_err("No models found. Make sure Ollama is running and models are installed (e.g., `ollama pull llama3:8b`).")
         else:
             models_sorted = sorted(models)
             self.model_combo.addItems(models_sorted)
@@ -286,12 +286,12 @@ class ChatWindow(QWidget):
                 self.model_combo.setCurrentIndex(idx)
 
             if not self.chat.toPlainText():
-                self.append_sys("Список моделей загружен. Выберите модель и задайте вопрос.")
+                self.append_sys("Model list loaded. Select a model and ask a question.")
 
         self.model_combo.setEnabled(True)
         self.refresh_btn.setEnabled(True)
 
-    # ---- вывод / markdown-bold ----
+    # ---- output / markdown-bold ----
     def _cursor_to_end(self) -> QTextCursor:
         c = self.chat.textCursor()
         c.movePosition(QTextCursor.MoveOperation.End)
@@ -300,23 +300,23 @@ class ChatWindow(QWidget):
 
     def append_user(self, text: str):
         c = self._cursor_to_end()
-        c.insertText("Вы: ", self.fmt_user_label)
+        c.insertText("You: ", self.fmt_user_label)
         c.insertBlock()
         c.insertText(text, self.fmt_normal)
-        c.insertBlock()  # пустая строка-разделитель
+        c.insertBlock()  # empty line separator
 
     def append_ai_header(self):
         c = self._cursor_to_end()
-        c.insertText("Модель: ", self.fmt_model_label)
+        c.insertText("Model: ", self.fmt_model_label)
         c.insertBlock()
-        # сброс markdown состояния
+        # reset markdown state
         self._md_in_bold = False
         self._md_carry = ""
 
     def _insert_text_md(self, text: str):
         """
-        Инкрементальная вставка текста с поддержкой **жирного**.
-        Учитывает перенос маркера '**' между чанками.
+        Incremental text insertion with **bold** support.
+        Handles marker '**' split across chunks.
         """
         s = self._md_carry + text
         self._md_carry = ""
@@ -328,14 +328,14 @@ class ChatWindow(QWidget):
             ch = s[i]
 
             if ch == '*':
-                # конец чанка – переносим
+                # chunk ended - carry over
                 if i == len(s) - 1:
                     self._md_carry = "*"
                     i += 1
                     break
-                # проверяем двойную звезду
+                # check for double star
                 if s[i + 1] == '*':
-                    # случай '***' → '**' переключаем режим, а '*' вставляем как литерал
+                    # case '***' → '**' toggles mode, and '*' is literal
                     if i + 2 < len(s) and s[i + 2] == '*':
                         self._md_in_bold = not self._md_in_bold
                         i += 2
@@ -348,13 +348,13 @@ class ChatWindow(QWidget):
                         i += 2
                         continue
                 else:
-                    # одиночную * считаем литералом
+                    # single * is literal
                     fmt = self.fmt_bold if self._md_in_bold else self.fmt_normal
                     c.insertText("*", fmt)
                     i += 1
                     continue
 
-            # обычный сегмент до следующей '*'
+            # normal segment until next '*'
             j = s.find('*', i)
             if j == -1:
                 chunk = s[i:]
@@ -377,24 +377,24 @@ class ChatWindow(QWidget):
 
     def append_err(self, text: str):
         c = self._cursor_to_end()
-        c.insertText(f"Ошибка: {text}", self.fmt_err)
+        c.insertText(f"Error: {text}", self.fmt_err)
         c.insertBlock()
 
-    # ---- управление режимом / историей ----
+    # ---- chat mode / history management ----
     def on_toggle_chat_mode(self, state: int):
         self._chat_mode = self.chat_mode_cb.isChecked()
         self.clear_history_btn.setEnabled(self._chat_mode)
-        # сохраняем переключение сразу
+        # save setting immediately
         save_config(self._current_config())
-        # подсказка пользователю
-        mode_text = "включён (модель видит историю)" if self._chat_mode else "выключен (без контекста)"
-        self.append_sys(f"Режим истории {mode_text}.")
+        # user hint
+        mode_text = "enabled (model sees history)" if self._chat_mode else "disabled (stateless)"
+        self.append_sys(f"History mode {mode_text}.")
 
     def on_clear_history(self):
         self._history.clear()
-        self.append_sys("История сообщений очищена.")
+        self.append_sys("Message history cleared.")
 
-    # ---- отправка ----
+    # ---- sending ----
     def on_send(self):
         if self._is_generating:
             return
@@ -403,7 +403,7 @@ class ChatWindow(QWidget):
             return
         model = self.model_combo.currentText().strip()
         if not model:
-            QMessageBox.warning(self, "Нет модели", "Выберите модель.")
+            QMessageBox.warning(self, "No model", "Select a model.")
             return
 
         options = {
@@ -413,21 +413,21 @@ class ChatWindow(QWidget):
 
         self._last_selected_model = model
 
-        # UI вывод
+        # UI output
         self.append_user(prompt)
         self.append_ai_header()
 
-        # готовим запрос в зависимости от режима
+        # prepare request depending on mode
         use_chat = self._chat_mode
         messages = None
         if use_chat:
-            # поддержка истории: добавим user сообщение
+            # history support: add user message
             self._history.append({"role": "user", "content": prompt})
-            messages = list(self._history)  # копия на момент запроса
+            messages = list(self._history)  # copy at request time
 
-        # блокируем элементы
+        # lock elements (input stays active!)
         self.input.clear()
-        self.input.setEnabled(False)
+        self.input.setFocus()  # keep typing immediately
         self.send_btn.setEnabled(False)
         self.model_combo.setEnabled(False)
         self.refresh_btn.setEnabled(False)
@@ -435,7 +435,7 @@ class ChatWindow(QWidget):
         self.clear_history_btn.setEnabled(False)
         self._is_generating = True
 
-        # запускаем воркер
+        # launch worker
         self.gen_thread = QThread(self)
         self.gen_worker = GenerateWorker(
             model=model,
@@ -457,12 +457,12 @@ class ChatWindow(QWidget):
         self.append_ai_stream_chunk(text)
 
     def on_finished(self, full_text: str):
-        # завершили вывод — перенос строки + пустая строка
+        # finished output — add line breaks
         c = self._cursor_to_end()
         c.insertBlock()
         c.insertBlock()
 
-        # если был чат-режим — добавим assistant в историю
+        # if chat mode was on — add assistant message to history
         if self._chat_mode:
             self._history.append({"role": "assistant", "content": full_text})
 
@@ -471,19 +471,23 @@ class ChatWindow(QWidget):
 
     def cleanup_gen(self, *_):
         self._is_generating = False
-        self.input.setEnabled(True)
+        # re-enable controls except input (which was never disabled)
         self.send_btn.setEnabled(True)
         self.model_combo.setEnabled(True)
         self.refresh_btn.setEnabled(True)
         self.chat_mode_cb.setEnabled(True)
         self.clear_history_btn.setEnabled(self._chat_mode)
+
+        # keep focus in the input field
+        self.input.setFocus()
+
         if self.gen_thread:
             self.gen_thread.quit()
             self.gen_thread.wait(2000)
             self.gen_thread = None
             self.gen_worker = None
 
-    # ---- сохранение настроек ----
+    # ---- saving settings ----
     def _current_config(self) -> dict:
         return {
             "temperature": float(self.temp_spin.value()),
