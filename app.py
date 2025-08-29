@@ -57,7 +57,9 @@ class GenerateWorker(QObject):
                     "model": self.model,
                     "prompt": self.prompt,
                     "stream": True,
-                    "options": self.options
+                    "options": self.options,
+                    "keep_alive": 0,  # don't keep session/cache after response
+                    "session": ""
                 }
                 with requests.post(url, json=payload, stream=True) as r:
                     r.raise_for_status()
