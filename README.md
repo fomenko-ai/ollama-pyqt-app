@@ -5,7 +5,7 @@ It supports both **stateless text generation** (`/api/generate`, like `ollama ru
 
 The app now features syntax highlighting in code blocks, copy-to-clipboard buttons, an expanding input field, streaming responses, and persistent user settings.
 
-<img width="1340" height="952" alt="image" src="https://github.com/user-attachments/assets/95433bac-c562-44b5-a2c7-299c40496231" />
+<img width="1314" height="1020" alt="image" src="https://github.com/user-attachments/assets/c13d494f-1797-4d31-9d0b-f51c42cfa38d" />
 
 ---
 
