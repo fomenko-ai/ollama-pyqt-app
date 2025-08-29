@@ -1,9 +1,9 @@
 # Ollama PyQt App
 
-A simple desktop application built with **PyQt6** that provides a graphical interface for interacting with [Ollama](https://ollama.ai/).  
-It supports both **stateless text generation** (`/api/generate`, similar to `ollama run`) and **chat with history** (`/api/chat`).  
+A desktop application built with **PyQt6** to interact with [Ollama](https://ollama.ai/) via a clean graphical interface.  
+It supports both **stateless text generation** (`/api/generate`, like `ollama run`) and **chat with history** (`/api/chat`).  
 
-The app features streaming responses, model selection, adjustable generation parameters (temperature, top_p), and persistent settings.
+The app now features syntax highlighting in code blocks, copy-to-clipboard buttons, an expanding input field, streaming responses, and persistent user settings.
 
 <img width="1340" height="952" alt="image" src="https://github.com/user-attachments/assets/95433bac-c562-44b5-a2c7-299c40496231" />
 
@@ -11,59 +11,66 @@ The app features streaming responses, model selection, adjustable generation par
 
 ## Features
 
-- **PyQt6 GUI** with input box, output window, and model selection dropdown
-- **Streaming responses** from the Ollama API, displayed in real time
+- **PyQt6 GUI** with input box, output area, model selector, and controls
+- **Streaming responses** in real time from the Ollama API
 - **Two modes**:
   - **Stateless mode** (`/api/generate`) – every request is independent
-  - **Chat mode** (`/api/chat`) – keeps conversation history
+  - **Chat mode** (`/api/chat`) – conversation history is preserved
 - **Configurable parameters**: `temperature`, `top_p`
-- **Persistent settings** saved in `~/.ollama_pyqt/config.json`
-- **Markdown-like bold support** in responses (`**bold**`)
+- **Persistent settings** in `~/.ollama_pyqt/config.json`
+- **Markdown support**:
+  - `**bold**` text in responses
+  - Inline code ``like this``
+  - Fenced code blocks with syntax highlighting (`python`, `json`, `bash`, …)
+- **Copy-to-clipboard buttons** for each code block
 - **Refreshable model list** (via `/api/tags`)
-- **Threaded workers** so the UI stays responsive
+- **Clearable history** in chat mode
+- **Threaded workers** so the UI remains responsive
 
 ---
 
 ## Requirements
 
 - **Python 3.9+**
-- **Ollama** installed and running locally (`http://127.0.0.1:11434`)
+- **Ollama** running locally (`http://127.0.0.1:11434`)
 
 ---
 
 ## Installation
 
-1. Ensure [Ollama](https://ollama.ai) is installed and running.
+1. Install [Ollama](https://ollama.ai) and ensure it is running.
    - Pull at least one model, e.g.:
      ```bash
      ollama pull gemma2:9b
      ```
 
-2. Create a virtual environment.
+2. Clone or copy this repository.
 
-3. Add required dependencies.
+3. Create a virtual environment and install dependencies.
+
 
 ---
 
 ## Usage
 
-1. Start (or ensure) the Ollama server is running and that you have at least one local model.
-2. Run the application:
+1. Start Ollama (`ollama serve` or system service). Ensure at least one model is installed.
+2. Run the app:
    ```bash
    uv run app.py
    ```
-3. In the GUI:
-   - Select a model in the **Model** dropdown (use **↻** to refresh the list)
-   - Type your prompt and press **Enter** or click **Send**
+3. In the UI:
+   - Select a model (**↻** refreshes the list)
+   - Type a prompt and press **Enter** or click **Send**
    - Toggle **History (Chat)** to switch between stateless and chat modes
-   - Adjust **temperature** and **top_p** in **Settings** if needed
-   - Use **Clear history** to reset the conversation when in chat mode
+   - Use **temperature** and **top_p** controls to adjust output style
+   - Use **Clear history** in chat mode to reset memory
+   - Copy code from responses with the **Copy** button
 
 ---
 
 ## Configuration
 
-The application stores user preferences in:
+Preferences are stored in:
 
 ```
 ~/.ollama_pyqt/config.json
@@ -79,39 +86,41 @@ Example:
 }
 ```
 
-To change the Ollama endpoint, edit the `OLLAMA_HOST` constant near the top of the source file.
+Change `OLLAMA_HOST` in the source (`app.py`) to connect to a custom endpoint.
 
 ---
 
 ## Project Structure
 
-- `app.py` — entry point with the full PyQt6 app and worker logic
-  - `GenerateWorker` — runs Ollama requests on a background `QThread`
-  - `ChatWindow` — main window: UI, state management, handlers
-- `~/.ollama_pyqt/config.json` — persisted user settings
+- `app.py` — full application (PyQt6 GUI, streaming workers, highlighting, copy buttons)
+  - `GenerateWorker` — background Ollama requests
+  - `ExpandingTextEdit` — auto-resizing input field
+  - `ChatWindow` — main window and logic
+- `~/.ollama_pyqt/config.json` — persisted settings
 
 ---
 
 ## Troubleshooting
 
-- **“No models found.”** Ensure Ollama is running and at least one model is installed:
+- **“No models found.”** Run:
   ```bash
   ollama pull gemma2:9b
   ```
-  Then click **↻** to refresh the model list.
-- **Cannot connect to Ollama.** Verify the endpoint (`http://127.0.0.1:11434`) and that `ollama serve` is running (on Linux), or the Ollama service is active.
-- **Markdown rendering.** Only `**bold**` is supported in-stream.
+  Then click **↻** in the UI.
+- **Connection errors.** Verify Ollama is running on `http://127.0.0.1:11434`.
+- **Markdown rendering.** Supported: `**bold**`, inline code, fenced code blocks (with highlighting).
+- **Copy button missing.** Only available for fenced code blocks (```).
 
 ---
 
 ## License
 
-This project’s source code is licensed under the **MIT License**.  
-However, it depends on **PyQt6**, which is licensed under the **GNU GPL v3** (or a commercial license from Riverbank Computing).  
+Source code is licensed under the **MIT License**.  
+This app uses **PyQt6**, licensed under **GNU GPL v3** (or commercially from Riverbank Computing).  
 
-➡️ This means:  
-- You are free to use and modify this code under the terms of MIT.  
-- If you **distribute** the application together with **PyQt6** under GPLv3, the combined work must comply with GPLv3.  
-- Alternatively, you may obtain a **commercial PyQt6 license** to distribute the application under different terms.  
+➡️ Practical meaning:  
+- You may use and modify this code under MIT.  
+- If distributing with PyQt6 (GPLv3), your work must also comply with GPLv3.  
+- Or, obtain a commercial PyQt6 license for different terms.  
 
-For more details, see: [Riverbank PyQt Licensing](https://www.riverbankcomputing.com/commercial/pyqt).
+See [Riverbank PyQt Licensing](https://www.riverbankcomputing.com/commercial/pyqt).
