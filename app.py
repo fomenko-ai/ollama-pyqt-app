@@ -58,7 +58,6 @@ class GenerateWorker(QObject):
                     "prompt": self.prompt,
                     "stream": True,
                     "options": self.options,
-                    "keep_alive": 0,  # don't keep session/cache after response
                     "session": ""
                 }
                 with requests.post(url, json=payload, stream=True) as r:
@@ -538,6 +537,9 @@ class ChatWindow(QWidget):
         self._chat_mode: bool = bool(self._cfg.get("chat_mode", False))  # False = ollama run (stateless)
         self._history: List[Dict[str, str]] = []  # for chat mode
 
+        # heavy render toggle (persisted)
+        self._heavy_render: bool = bool(self._cfg.get("heavy_render", True))
+
         # For replacing the last streamed answer with rich HTML (code copy + highlight)
         self._answer_start_pos: Optional[int] = None
         self._current_answer_raw: List[str] = []
@@ -568,6 +570,11 @@ class ChatWindow(QWidget):
         self.clear_history_btn.clicked.connect(self.on_clear_history)
         self.clear_history_btn.setEnabled(self._chat_mode)
 
+        # NEW: Heavy render toggle
+        self.heavy_render_cb = QCheckBox("Heavy render (HTML + highlight)")
+        self.heavy_render_cb.setChecked(self._heavy_render)
+        self.heavy_render_cb.stateChanged.connect(self.on_toggle_heavy_render)
+
         # top panel
         top_bar = QHBoxLayout()
         top_bar.addWidget(QLabel("Model:"))
@@ -576,6 +583,8 @@ class ChatWindow(QWidget):
         top_bar.addSpacing(12)
         top_bar.addWidget(self.chat_mode_cb)
         top_bar.addWidget(self.clear_history_btn)
+        top_bar.addSpacing(12)
+        top_bar.addWidget(self.heavy_render_cb)
 
         # ---- Settings (temperature / top_p) ----
         self.temp_spin = QDoubleSpinBox()
@@ -635,6 +644,10 @@ class ChatWindow(QWidget):
         # preload models
         self.refresh_models(initial=True)
 
+        # (optional) speed-ups for long sessions
+        self.chat.document().setUndoRedoEnabled(False)
+        self.chat.document().setMaximumBlockCount(3000)
+
     # ---- models ----
     def refresh_models(self, initial: bool = False):
         self.model_combo.setEnabled(False)
@@ -675,6 +688,23 @@ class ChatWindow(QWidget):
         self.model_combo.setEnabled(True)
         self.refresh_btn.setEnabled(True)
 
+    # ---- toggles ----
+    def on_toggle_chat_mode(self, state: int):
+        self._chat_mode = self.chat_mode_cb.isChecked()
+        self.clear_history_btn.setEnabled(self._chat_mode)
+        save_config(self._current_config())
+        mode_text = "enabled (model sees history)" if self._chat_mode else "disabled (stateless)"
+        self.append_sys(f"History mode {mode_text}.")
+
+    def on_toggle_heavy_render(self, state: int):
+        self._heavy_render = self.heavy_render_cb.isChecked()
+        save_config(self._current_config())
+        self.append_sys(f"Heavy render {'ON' if self._heavy_render else 'OFF'}.")
+
+    def on_clear_history(self):
+        self._history.clear()
+        self.append_sys("Message history cleared.")
+
     # ---- output / streaming preview (simple **bold**) ----
     def _cursor_to_end(self) -> QTextCursor:
         c = self.chat.textCursor()
@@ -693,10 +723,14 @@ class ChatWindow(QWidget):
         c = self._cursor_to_end()
         c.insertText("Model: ", self.fmt_model_label)
         c.insertBlock()
-        # remember where the answer starts (for replacement with HTML later)
-        self._answer_start_pos = self.chat.textCursor().position()
-        self._current_answer_raw = []
-        self._code_blocks_store.clear()
+        if self._heavy_render:
+            self._answer_start_pos = self.chat.textCursor().position()
+            self._current_answer_raw = []
+            self._code_blocks_store.clear()
+        else:
+            self._answer_start_pos = None
+            self._current_answer_raw = []
+            self._code_blocks_store.clear()
         # reset markdown state for streaming preview
         self._md_in_bold = False
         self._md_carry = ""
@@ -750,7 +784,8 @@ class ChatWindow(QWidget):
     def append_ai_stream_chunk(self, text: str):
         # preview in plain rich text (bold only)
         self._insert_text_md(text)
-        self._current_answer_raw.append(text)
+        if self._heavy_render:
+            self._current_answer_raw.append(text)
         self.chat.ensureCursorVisible()
 
     def append_sys(self, text: str):
@@ -777,18 +812,6 @@ class ChatWindow(QWidget):
                 self.chat.setOpenExternalLinks(True)
                 self.chat.setSource(url)
                 self.chat.setOpenExternalLinks(False)
-
-    # ---- chat mode / history management ----
-    def on_toggle_chat_mode(self, state: int):
-        self._chat_mode = self.chat_mode_cb.isChecked()
-        self.clear_history_btn.setEnabled(self._chat_mode)
-        save_config(self._current_config())
-        mode_text = "enabled (model sees history)" if self._chat_mode else "disabled (stateless)"
-        self.append_sys(f"History mode {mode_text}.")
-
-    def on_clear_history(self):
-        self._history.clear()
-        self.append_sys("Message history cleared.")
 
     # ---- sending ----
     def on_send(self):
@@ -861,20 +884,32 @@ class ChatWindow(QWidget):
 
         html_text = md_to_html_with_copy(full_text, self._code_blocks_store)
 
+        self.chat.setUpdatesEnabled(False)
         c = self.chat.textCursor()
+        c.beginEditBlock()
         c.setPosition(self._answer_start_pos)
         c.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
         c.removeSelectedText()
         c.insertHtml(html_text)
         c.insertBlock()
+        c.endEditBlock()
         self.chat.setTextCursor(c)
+        self.chat.setUpdatesEnabled(True)
         self.chat.ensureCursorVisible()
 
         self._answer_start_pos = None
         self._current_answer_raw = []
 
     def on_finished(self, full_text: str):
-        self._replace_last_answer_with_html(full_text)
+        if self._heavy_render:
+            self._replace_last_answer_with_html("".join(self._current_answer_raw) if self._current_answer_raw else full_text)
+        else:
+            c = self._cursor_to_end()
+            c.insertBlock()
+            c.insertBlock()
+            self._answer_start_pos = None
+            self._current_answer_raw = []
+
         if self._chat_mode:
             self._history.append({"role": "assistant", "content": full_text})
 
@@ -903,6 +938,7 @@ class ChatWindow(QWidget):
             "top_p": float(self.top_p_spin.value()),
             "last_model": self._last_selected_model or self.model_combo.currentText().strip() or "",
             "chat_mode": bool(self._chat_mode),
+            "heavy_render": bool(self._heavy_render),
         }
 
     def closeEvent(self, event):

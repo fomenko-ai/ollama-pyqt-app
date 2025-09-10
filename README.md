@@ -1,11 +1,7 @@
 # Ollama PyQt App
 
 A desktop application built with **PyQt6** to interact with [Ollama](https://ollama.ai/) via a clean graphical interface.  
-It supports both **stateless text generation** (`/api/generate`, like `ollama run`) and **chat with history** (`/api/chat`).  
-
-The app now features syntax highlighting in code blocks, copy-to-clipboard buttons, an expanding input field, streaming responses, and persistent user settings.
-
-<img width="1314" height="1020" alt="image" src="https://github.com/user-attachments/assets/c13d494f-1797-4d31-9d0b-f51c42cfa38d" />
+It supports both **stateless text generation** (`/api/generate`, like `ollama run`) and **chat with history** (`/api/chat`).
 
 ---
 
@@ -18,11 +14,10 @@ The app now features syntax highlighting in code blocks, copy-to-clipboard butto
   - **Chat mode** (`/api/chat`) – conversation history is preserved
 - **Configurable parameters**: `temperature`, `top_p`
 - **Persistent settings** in `~/.ollama_pyqt/config.json`
-- **Markdown support**:
-  - `**bold**` text in responses
-  - Inline code ``like this``
-  - Fenced code blocks with syntax highlighting (`python`, `json`, `bash`, …)
-- **Copy-to-clipboard buttons** for each code block
+- **Markdown during streaming**: supports `**bold**` while text streams
+- **Heavy render (optional)**: when enabled, the last answer is re-rendered as HTML with
+  - fenced code blocks (```lang) highlighted (`python`, `json`, `bash`, …)
+  - **Copy to clipboard** buttons per code block
 - **Refreshable model list** (via `/api/tags`)
 - **Clearable history** in chat mode
 - **Threaded workers** so the UI remains responsive
@@ -41,7 +36,7 @@ The app now features syntax highlighting in code blocks, copy-to-clipboard butto
 1. Install [Ollama](https://ollama.ai) and ensure it is running.
    - Pull at least one model, e.g.:
      ```bash
-     ollama pull gemma2:9b
+     ollama pull llama3.1:8b
      ```
 
 2. Clone or copy this repository.
@@ -62,9 +57,9 @@ The app now features syntax highlighting in code blocks, copy-to-clipboard butto
    - Select a model (**↻** refreshes the list)
    - Type a prompt and press **Enter** or click **Send**
    - Toggle **History (Chat)** to switch between stateless and chat modes
-   - Use **temperature** and **top_p** controls to adjust output style
+   - Toggle **Heavy render** to enable/disable HTML re-render with highlighting + Copy buttons
+   - Use **temperature** and **top_p** to adjust output style
    - Use **Clear history** in chat mode to reset memory
-   - Copy code from responses with the **Copy** button
 
 ---
 
@@ -81,8 +76,9 @@ Example:
 {
   "temperature": 0.7,
   "top_p": 0.9,
-  "last_model": "gemma2:9b",
-  "chat_mode": true
+  "last_model": "llama3.1:8b",
+  "chat_mode": false,
+  "heavy_render": true
 }
 ```
 
@@ -92,9 +88,9 @@ Change `OLLAMA_HOST` in the source (`app.py`) to connect to a custom endpoint.
 
 ## Project Structure
 
-- `app.py` — full application (PyQt6 GUI, streaming workers, highlighting, copy buttons)
+- `app.py` — full application (PyQt6 GUI, streaming workers, optional heavy render)
   - `GenerateWorker` — background Ollama requests
-  - `ExpandingTextEdit` — auto-resizing input field
+  - `ExpandingTextEdit` — auto-resizing input field (Enter = send, Shift+Enter = newline)
   - `ChatWindow` — main window and logic
 - `~/.ollama_pyqt/config.json` — persisted settings
 
@@ -104,12 +100,14 @@ Change `OLLAMA_HOST` in the source (`app.py`) to connect to a custom endpoint.
 
 - **“No models found.”** Run:
   ```bash
-  ollama pull gemma2:9b
+  ollama pull llama3.1:8b
   ```
   Then click **↻** in the UI.
-- **Connection errors.** Verify Ollama is running on `http://127.0.0.1:11434`.
-- **Markdown rendering.** Supported: `**bold**`, inline code, fenced code blocks (with highlighting).
-- **Copy button missing.** Only available for fenced code blocks (```).
+
+- **Connection errors.** Verify Ollama is running at `http://127.0.0.1:11434` (or adjust `OLLAMA_HOST`).
+
+- **UI feels slower after several replies.** Turn **Heavy render OFF**.
+
 
 ---
 
