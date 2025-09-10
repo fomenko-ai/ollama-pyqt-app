@@ -3,6 +3,8 @@
 A desktop application built with **PyQt6** to interact with [Ollama](https://ollama.ai/) via a clean graphical interface.  
 It supports both **stateless text generation** (`/api/generate`, like `ollama run`) and **chat with history** (`/api/chat`).
 
+<img width="1084" height="993" alt="image" src="https://github.com/user-attachments/assets/60bfef95-aaef-49cf-8317-96ac0058709c" />
+
 ---
 
 ## Features
